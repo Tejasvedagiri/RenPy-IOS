@@ -7,6 +7,8 @@ into RenPy Player:
   * adds a build phase that copies the repo's games/ folder into the app,
   * exposes Documents/ to Finder and the Files app,
   * lets base/main.py write logs next to each game's saves,
+  * installs ios/overlay/renpy_player_compat.py (fixes for games made with
+    older Ren'Py versions),
   * sets the bundle id / team.
 
 Safe to run more than once.
@@ -49,6 +51,17 @@ LOGDIR_PATCH = """    import renpy  # @UnresolvedImport
 
     if renpy.android:
         return os.environ["ANDROID_PUBLIC"]
+"""
+
+COMPAT_PATCH = """    except ImportError:
+        print("Could not import renpy.bootstrap. Please ensure you decompressed Ren'Py", file=sys.stderr)
+        print("correctly, preserving the directory structure.", file=sys.stderr)
+        raise
+
+    # RenPy Player: fixes for games made with older Ren'Py versions.
+    import renpy_player_compat
+
+    renpy_player_compat.install()
 """
 
 
@@ -195,26 +208,34 @@ def patch_info_plist(project, display_name):
 def patch_main_py(project):
     fn = os.path.join(project, "base", "main.py")
     if not os.path.exists(fn):
-        print(f"warning: {fn} not found; skipping log directory patch.")
+        print(f"warning: {fn} not found; skipping base/main.py patches.")
         return
+
+    shutil.copy(os.path.join(OVERLAY, "renpy_player_compat.py"), os.path.join(project, "base", "renpy_player_compat.py"))
 
     with open(fn) as f:
         text = f.read()
 
-    if "RENPY_PLAYER_LOGDIR" in text:
-        return
-
-    original = """    import renpy  # @UnresolvedImport
+    if "RENPY_PLAYER_LOGDIR" not in text:
+        original = """    import renpy  # @UnresolvedImport
 
     if renpy.android:
         return os.environ["ANDROID_PUBLIC"]
 """
-    if original not in text:
-        print("warning: path_to_logdir() in base/main.py has an unexpected shape; skipping log directory patch.")
-        return
+        if original in text:
+            text = text.replace(original, LOGDIR_PATCH, 1)
+        else:
+            print("warning: path_to_logdir() in base/main.py has an unexpected shape; skipping log directory patch.")
+
+    if "renpy_player_compat" not in text:
+        original = COMPAT_PATCH.split("\n\n    # RenPy Player")[0] + "\n"
+        if original in text:
+            text = text.replace(original, COMPAT_PATCH, 1)
+        else:
+            print("warning: main() in base/main.py has an unexpected shape; skipping compatibility patch.")
 
     with open(fn, "w") as f:
-        f.write(text.replace(original, LOGDIR_PATCH, 1))
+        f.write(text)
 
 
 def main():

@@ -60,6 +60,10 @@ overlay without regenerating the project. `--force` regenerates the project from
 
 - **Engine version:** games run on Ren'Py 8.6.2. Games made with Ren'Py 8.x generally work.
   Ren'Py 7.x (Python 2) games may fail if they include custom Python code.
+  [`ios/overlay/renpy_player_compat.py`](ios/overlay/renpy_player_compat.py) smooths over
+  differences with the engine a game was made for: if a `.rpy` file doesn't compile on 8.6.2,
+  the game's own compiled `.rpyc` is used, and games from Ren'Py 7.5.3 / 8.0.3 or older can
+  still find files in `game/images/` by name, as they could before.
 - **Switching games:** quitting a game closes the app (Ren'Py can only start once per
   process). Open the app again to pick another game.
 - **Mods / PC-only code:** games that depend on desktop features (Steam, opening local
