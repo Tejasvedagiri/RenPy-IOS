@@ -44,6 +44,15 @@ open ios/RenPyPlayer/*.xcodeproj
 In Xcode, choose your Team under *Signing & Capabilities*, plug in the iPhone, and press Run.
 After that you only need Xcode: adding games to `games/` and pressing Run again is enough.
 
+Or reinstall from the terminal, without opening Xcode:
+
+```sh
+./install.sh               # build, install on the connected iPhone, and launch
+./install.sh --no-launch   # DEVICE="My iPhone" or CONFIGURATION=Debug also work
+```
+
+Installing over the existing app keeps its saves and imported games.
+
 If you change `ios/overlay/main.m`, run `scripts/setup.sh` again. It re-applies the
 overlay without regenerating the project. `--force` regenerates the project from scratch.
 
