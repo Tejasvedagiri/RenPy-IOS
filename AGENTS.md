@@ -40,3 +40,10 @@
 - Ren'Py 7 (Python 2) games → Python 2 module names (`cPickle`, `StringIO`, `urllib2`,
   `__builtin__`, ...) import their Python 3 equivalents. `cPickle` uses Ren'Py's
   `renpy.compat.pickle`, which reads Python 2 pickles.
+- Ren'Py 7 (Python 2) games → `keys()`, `values()` and `items()` on dicts made in game code
+  (RevertableDict) return lists again, so `random.choice(d.keys())` and `d.items()[0]` work.
+  (`iteritems`, `has_key`, `unicode` and `xrange` are already provided by Ren'Py 8.)
+- Ren'Py 7 (Python 2) games → `<`, `<=`, `>`, `>=` fall back to Python 2 ordering
+  (None < numbers < other types) instead of raising TypeError, e.g. `Q_Giant > 0` while
+  `Q_Giant` is None. Done by rewriting the AST in `renpy.python.wrap_node`; the bytecode
+  cache magic is bumped so old cached bytecode isn't reused.

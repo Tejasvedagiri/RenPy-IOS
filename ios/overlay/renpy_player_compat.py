@@ -156,14 +156,41 @@ PY2_MODULES = {
 }
 
 
+_script_version_txt = []
+
+
+def game_script_version(renpy):
+    """
+    The Ren'Py version the game was made for, or None if unknown. Reads
+    script_version.txt itself when the game's config doesn't have it yet
+    (e.g. while Ren'Py compiles the game's Python before init).
+    """
+
+    version = getattr(renpy.config, "script_version", None) or getattr(renpy.config, "early_script_version", None)
+
+    if version:
+        return tuple(version)
+
+    if not _script_version_txt:
+        try:
+            import ast
+
+            with renpy.loader.load("script_version.txt") as f:
+                _script_version_txt.append(tuple(ast.literal_eval(f.read().decode("utf-8"))))
+        except Exception:
+            return None
+
+    return _script_version_txt[0]
+
+
 def python2_game(renpy):
     """
     True unless the game is known to be made for Ren'Py 8 (Python 3).
     """
 
-    version = getattr(renpy.config, "script_version", None) or getattr(renpy.config, "early_script_version", None)
+    version = game_script_version(renpy)
 
-    return not version or tuple(version) < (8, 0, 0)
+    return not version or version < (8, 0, 0)
 
 
 class Py2ModuleLoader(object):
@@ -232,10 +259,140 @@ def patch_imports(renpy):
         sys.meta_path.append(Py2ModuleFinder(renpy))
 
 
+def patch_dict_views(renpy):
+    """
+    On Python 2, dict.keys(), .values() and .items() returned lists, so Ren'Py 7
+    games do things like random.choice(d.keys()). Dicts made in game code are
+    RevertableDicts; for Python 2 games, make those methods return lists again.
+    """
+
+    RevertableDict = renpy.revertable.RevertableDict
+
+    def list_method(view):
+        def method(self):
+            if python2_game(renpy):
+                return list(view(self))
+
+            return view(self)
+
+        method.__name__ = view.__name__
+        return method
+
+    RevertableDict.keys = list_method(dict.keys)
+    RevertableDict.values = list_method(dict.values)
+    RevertableDict.items = list_method(dict.items)
+
+
+def py2_order_key(x):
+    """
+    How Python 2 ordered values of different types: None first, then numbers,
+    then everything else by type name.
+    """
+
+    import numbers
+
+    if x is None:
+        return (0, "")
+
+    if isinstance(x, numbers.Number):
+        return (1, "")
+
+    return (2, type(x).__name__)
+
+
+def py2_compare(op, a, b):
+    try:
+        return op(a, b)
+    except TypeError:
+        ka = py2_order_key(a)
+        kb = py2_order_key(b)
+
+        if ka == kb:
+            raise
+
+        return op(ka, kb)
+
+
+PY2_COMPARE = "_renpy_player_py2_compare"
+
+
+def patch_comparisons(renpy):
+    """
+    Python 2 let any two values be ordered (None < 0 is True), and Ren'Py 7
+    games rely on it, e.g. `if Q_Giant > 0:` before Q_Giant is set. For Python 2
+    games, compile <, <=, > and >= into a call that falls back to Python 2's
+    ordering when Python 3 raises TypeError.
+    """
+
+    import ast
+    import builtins
+    import operator
+
+    ops = {
+        ast.Lt: "lt",
+        ast.LtE: "le",
+        ast.Gt: "gt",
+        ast.GtE: "ge",
+    }
+
+    setattr(builtins, PY2_COMPARE, py2_compare)
+
+    class Py2Comparisons(ast.NodeTransformer):
+
+        def visit_Compare(self, node):
+            self.generic_visit(node)
+
+            # Chained comparisons (a < b < c) are left alone.
+            if len(node.ops) != 1 or type(node.ops[0]) not in ops:
+                return node
+
+            call = ast.Call(
+                func=ast.Name(id=PY2_COMPARE, ctx=ast.Load()),
+                args=[
+                    ast.Attribute(value=ast.Name(id="_renpy_player_operator", ctx=ast.Load()), attr=ops[type(node.ops[0])], ctx=ast.Load()),
+                    node.left,
+                    node.comparators[0],
+                ],
+                keywords=[],
+            )
+
+            return ast.copy_location(call, node)
+
+    setattr(builtins, "_renpy_player_operator", operator)
+
+    class PlayerWrapNode(object):
+        """
+        Stands in for renpy.python.wrap_node, which py_compile() runs on every
+        piece of game Python.
+        """
+
+        def __init__(self, wrap_node):
+            self.wrap_node = wrap_node
+            self.transformer = Py2Comparisons()
+
+        def visit(self, node):
+            node = self.wrap_node.visit(node)
+
+            if python2_game(renpy):
+                node = ast.fix_missing_locations(self.transformer.visit(node))
+
+            return node
+
+    if not isinstance(renpy.python.wrap_node, PlayerWrapNode) and type(renpy.python.wrap_node).__name__ != "PlayerWrapNode":
+        renpy.python.wrap_node = PlayerWrapNode(renpy.python.wrap_node)
+
+    # Don't reuse bytecode compiled without this.
+    CompileCache = renpy.python.CompileCache
+    if not CompileCache.MAGIC_NUMBER.endswith(b"_player1"):
+        CompileCache.MAGIC_NUMBER = CompileCache.MAGIC_NUMBER + b"_player1"
+
+
 def apply(renpy):
     patch_loader(renpy)
     patch_script(renpy)
     patch_imports(renpy)
+    patch_dict_views(renpy)
+    patch_comparisons(renpy)
 
 
 def install():
