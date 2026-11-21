@@ -133,9 +133,109 @@ def patch_script(renpy):
     Script.load_file = player_load_file
 
 
+# Python 2 module names that Ren'Py 7 games import, and their Python 3 homes.
+# cPickle is special-cased in Py2ModuleFinder.
+PY2_MODULES = {
+    "__builtin__": "builtins",
+    "ConfigParser": "configparser",
+    "Queue": "queue",
+    "copy_reg": "copyreg",
+    "thread": "_thread",
+    "dummy_thread": "_dummy_thread",
+    "repr": "reprlib",
+    "urllib2": "urllib.request",
+    "urlparse": "urllib.parse",
+    "httplib": "http.client",
+    "HTMLParser": "html.parser",
+    "htmlentitydefs": "html.entities",
+    "cookielib": "http.cookiejar",
+    "Cookie": "http.cookies",
+    "SocketServer": "socketserver",
+    "cStringIO": "io",
+    "StringIO": "io",
+}
+
+
+def python2_game(renpy):
+    """
+    True unless the game is known to be made for Ren'Py 8 (Python 3).
+    """
+
+    version = getattr(renpy.config, "script_version", None) or getattr(renpy.config, "early_script_version", None)
+
+    return not version or tuple(version) < (8, 0, 0)
+
+
+class Py2ModuleLoader(object):
+
+    def __init__(self, renpy, name):
+        self.renpy = renpy
+        self.name = name
+
+    def create_module(self, spec):
+        import importlib
+        import types
+
+        if self.name == "cPickle":
+            # Ren'Py's own pickle wrappers read Python 2 pickles (e.g. old
+            # saves the game unpickles itself).
+            import pickle
+
+            compat_pickle = self.renpy.compat.pickle
+
+            module = types.ModuleType("cPickle")
+            module.__dict__.update((k, v) for k, v in vars(pickle).items() if not k.startswith("__"))
+            module.load = compat_pickle.load
+            module.loads = compat_pickle.loads
+            module.dump = lambda obj, f, protocol=None: compat_pickle.dump(obj, f)
+            module.dumps = lambda obj, protocol=None: compat_pickle.dumps(obj)
+            return module
+
+        module = importlib.import_module(PY2_MODULES[self.name])
+        self.saved = (module.__spec__, getattr(module, "__loader__", None))
+        return module
+
+    def exec_module(self, module):
+        # The import system sets __spec__ and __loader__ on the module we
+        # returned; put the real module's back.
+        saved = getattr(self, "saved", None)
+
+        if saved:
+            module.__spec__, module.__loader__ = saved
+
+
+class Py2ModuleFinder(object):
+    """
+    Lets `import cPickle` and other Python 2 module names work in games made
+    for Ren'Py 7, which ran on Python 2.
+    """
+
+    def __init__(self, renpy):
+        self.renpy = renpy
+
+    def find_spec(self, name, path=None, target=None):
+        if name != "cPickle" and name not in PY2_MODULES:
+            return None
+
+        if not python2_game(self.renpy):
+            return None
+
+        import importlib.machinery
+
+        return importlib.machinery.ModuleSpec(name, Py2ModuleLoader(self.renpy, name))
+
+
+def patch_imports(renpy):
+    import sys
+
+    if not any(isinstance(i, Py2ModuleFinder) for i in sys.meta_path):
+        sys.meta_path.append(Py2ModuleFinder(renpy))
+
+
 def apply(renpy):
     patch_loader(renpy)
     patch_script(renpy)
+    patch_imports(renpy)
 
 
 def install():
