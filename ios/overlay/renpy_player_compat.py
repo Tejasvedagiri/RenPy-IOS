@@ -387,12 +387,37 @@ def patch_comparisons(renpy):
         CompileCache.MAGIC_NUMBER = CompileCache.MAGIC_NUMBER + b"_player1"
 
 
+def patch_missing_expressions(renpy):
+    """
+    Older Ren'Py compiled a screen property with no value (a bare `xpos` line)
+    to an expression of None, and its py_compile() did str(source), so it meant
+    `xpos None`. 8.6.2 raises TypeError for it, so compile None as "None".
+    """
+
+    py_compile = renpy.python.py_compile
+    if getattr(py_compile, "_renpy_player", False):
+        return
+
+    def player_py_compile(source, *args, **kwargs):
+        if source is None:
+            source = "None"
+        return py_compile(source, *args, **kwargs)
+
+    player_py_compile._renpy_player = True
+
+    renpy.python.py_compile = player_py_compile
+    # pyanalysis imported it by name.
+    if renpy.pyanalysis.py_compile is py_compile:
+        renpy.pyanalysis.py_compile = player_py_compile
+
+
 def apply(renpy):
     patch_loader(renpy)
     patch_script(renpy)
     patch_imports(renpy)
     patch_dict_views(renpy)
     patch_comparisons(renpy)
+    patch_missing_expressions(renpy)
 
 
 def install():

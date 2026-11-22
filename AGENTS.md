@@ -52,3 +52,7 @@
   (None < numbers < other types) instead of raising TypeError, e.g. `Q_Giant > 0` while
   `Q_Giant` is None. Done by rewriting the AST in `renpy.python.wrap_node`; the bytecode
   cache magic is bumped so old cached bytecode isn't reused.
+- Screen properties with no value (a bare `xpos` line) → compiled as `None`, like old
+  Ren'Py's `str(source)` did. 8.6.2 raised "TypeError: source must be a string,
+  renpy.ast.PyExpr, or ast.Module" (Double Perception 6.6, Ren'Py 7.4.10). Done by
+  wrapping `renpy.python.py_compile` (and the copy `renpy.pyanalysis` imported).
