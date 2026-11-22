@@ -1,13 +1,14 @@
 # games/
 
-Drop Ren'Py games here, **one unzipped folder per game**. Every Xcode build copies this
-folder into the app, and each game shows up in the app's library under "Included With App".
+Drop Ren'Py games here, **one unzipped folder per game**. `./install.sh` (or
+`scripts/push_games.sh`) copies them into the app's storage on the iPhone, and each game
+shows up in the app's library under "On This Device". Only new or changed files are sent.
 
 ```
 games/
   MyGame/                  <- the unzipped PC / Mac / Linux build
     game/                  <- must exist (scripts, images, .rpa archives…)
-    renpy/  lib/  *.exe    <- fine to leave in; they're skipped when bundling
+    renpy/  lib/  *.exe    <- fine to leave in; they're skipped when copying
   AnotherGame-1.2-pc/
     game/
 ```

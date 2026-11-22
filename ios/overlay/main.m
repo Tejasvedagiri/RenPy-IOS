@@ -3,8 +3,9 @@
 // Replaces the stock renios main.c. Before Ren'Py starts, it shows a native
 // list of the games found in:
 //
-//   <app bundle>/games/<Game>/   - copied from the repo's games/ folder at build time
-//   Documents/games/<Game>/      - added through Finder / the Files app / the + button
+//   Documents/games/<Game>/      - copied from the repo's games/ folder by install.sh,
+//                                  or added through Finder / the Files app / the + button
+//   <app bundle>/games/<Game>/   - games built into the app (not used by default)
 //
 // When a game is picked, Ren'Py is started with that folder as its base
 // directory and a per-game save directory.
@@ -260,7 +261,7 @@ static NSArray<RPGame *> *RPScanGames(NSURL *folder, BOOL removable) {
                   "Files › On My iPhone › RenPy Player › games\n"
                   "(or Finder › iPhone › Files on a Mac),\n"
                   "tap + to import a folder,\n"
-                  "or put it in the project's games/ folder and rebuild.";
+                  "or put it in the project's games/ folder and run ./install.sh.";
     self.tableView.backgroundView = label;
 }
 
@@ -452,6 +453,10 @@ static void RPPrepareDocuments(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     [fm createDirectoryAtURL:RPUserGamesURL() withIntermediateDirectories:YES attributes:nil error:nil];
     [fm createDirectoryAtURL:RPSavesURL() withIntermediateDirectories:YES attributes:nil error:nil];
+
+    // Games can be many GB and can be copied again from the Mac, so keep them out of
+    // iCloud / Finder backups. Saves are still backed up.
+    [RPUserGamesURL() setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:nil];
 
     NSURL *readme = [RPUserGamesURL() URLByAppendingPathComponent:@"PUT GAMES HERE.txt"];
     if (![fm fileExistsAtPath:readme.path]) {

@@ -18,6 +18,11 @@
   `renpy.import_all()`.
 - After changing anything in `ios/overlay/`, run `scripts/setup.sh` (re-applies the
   overlay), then `./install.sh` to build and install on the phone.
+- Games are not built into the app. `./install.sh` installs the app, then runs
+  `scripts/push_games.sh`, which copies `games/` (minus `renpy/`, `lib/`, executables) into
+  the app's `Documents/games` with `devicectl device copy to`. It skips unchanged files by
+  mtime, so the staging copy in `.cache/games-stage` uses hard links to keep mtimes.
+  `./install.sh --no-games` skips the copy, `--games-only` skips the build.
 - `setup.sh` rewrites signing settings, so always pass them:
   `TEAM_ID=4YB4ZBB6A3 BUNDLE_ID=com.tejasvedagiri.renpyplayer scripts/setup.sh`.
   Without them the build fails with "requires a development team".

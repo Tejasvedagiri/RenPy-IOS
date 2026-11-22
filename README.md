@@ -13,7 +13,7 @@ There are three ways, and you can mix them:
 
 | Way | How |
 | --- | --- |
-| **Repo `games/` folder** | Put unzipped game folders in [`games/`](games/README.md) and build in Xcode. They're bundled into the app. |
+| **Repo `games/` folder** | Put unzipped game folders in [`games/`](games/README.md) and run `./install.sh`. It copies them into the app's storage on the phone (only new or changed files). |
 | **Finder / Files app** | Connect the iPhone to your Mac → Finder → iPhone → **Files** → RenPy Player → drag folders into `games`. Or on the phone: Files → On My iPhone → RenPy Player → games. |
 | **+ button in the app** | Import a game folder from iCloud Drive or another location in Files. It's copied into the app. |
 
@@ -37,21 +37,26 @@ open ios/RenPyPlayer/*.xcodeproj
    project, which contains the engine, Python and the prebuilt libraries,
 3. runs `scripts/apply_overlay.py`, which:
    - replaces `main.c` with [`ios/overlay/main.m`](ios/overlay/main.m) (the library UI and launcher),
-   - adds a **Bundle games** build phase that copies `games/` into the app,
    - turns on Files app / Finder access to the app's Documents folder,
    - sends Ren'Py's `log.txt` to each game's save folder.
 
 In Xcode, choose your Team under *Signing & Capabilities*, plug in the iPhone, and press Run.
-After that you only need Xcode: adding games to `games/` and pressing Run again is enough.
 
-Or reinstall from the terminal, without opening Xcode:
+Then install from the terminal, without opening Xcode:
 
 ```sh
-./install.sh               # build, install on the connected iPhone, and launch
+./install.sh               # build, install the app, copy games/ to the phone, and launch
+./install.sh --no-games    # app only
+./install.sh --games-only  # copy games only (no build), same as scripts/push_games.sh
 ./install.sh --no-launch   # DEVICE="My iPhone" or CONFIGURATION=Debug also work
+scripts/push_games.sh "Some Game"   # copy just one game folder
 ```
 
-Installing over the existing app keeps its saves and imported games.
+Games aren't built into the app, so the app stays small and installs quickly. They're copied
+into the app's storage (`Documents/games`) with `devicectl`, which skips files that haven't
+changed, so only the first copy of a game is slow. Games deleted from `games/` stay on the
+phone until you swipe left on them in the app. The games folder is left out of iCloud
+backups, but saves are backed up. Installing over the existing app keeps its saves and games.
 
 If you change `ios/overlay/main.m`, run `scripts/setup.sh` again. It re-applies the
 overlay without regenerating the project. `--force` regenerates the project from scratch.
@@ -70,6 +75,4 @@ overlay without regenerating the project. `--force` regenerates the project from
   files, native libraries) may not work.
 - **Logs:** if a game crashes, look for `log.txt` / `traceback.txt` in
   `Files → RenPy Player → saves → <game>`.
-- Games bundled in the app are read-only. Ren'Py handles this, but games that ship only
-  `.rpy` sources compile more slowly on every launch. Putting them in Documents
-  (Finder/Files) lets Ren'Py cache the compiled scripts.
+- Games are in Documents, which is writable, so Ren'Py can cache compiled scripts there.
